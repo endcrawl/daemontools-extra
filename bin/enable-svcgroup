@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+test `id -u` -eq 0 || exit 0
+svcname="${PWD##*/}"
+svcgroup="svc-${svcname}"
+getent group "$svcgroup" >/dev/null || exit 0
+for f in ok control lock; do
+  chgrp "$svcgroup" supervise/"$f"
+  chmod g+rw supervise/"$f"
+done
