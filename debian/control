@@ -1,0 +1,15 @@
+Source: daemontools-extra
+Section: utils
+Priority: optional
+Maintainer: Alan Grow <alangrow@gmail.com>
+Build-Depends: debhelper (>= 8.0.0)
+Standards-Version: 3.7.3.0
+Vcs-Git: git@github.com:endcrawl/daemontools-extra.git
+Vcs-Browser: https://github.com/endcrawl/daemontools-extra
+
+Package: daemontools-extra
+Section: utils
+Architecture: all
+Depends: python (>= 2.6)
+Description: Useful building blocks for daemontools services.
+
