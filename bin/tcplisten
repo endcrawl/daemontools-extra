@@ -5,12 +5,25 @@ import os
 import socket
 
 prog = sys.argv.pop(0)
+backlog = 128
+
+while len(sys.argv):
+  arg0 = sys.argv[0]
+  if arg0 == '-b':
+    sys.argv.pop(0)
+    backlog = int(sys.argv.pop(0))
+  elif arg0 == '--':
+    sys.argv.pop(0)
+    break
+  else:
+    break
+
 hostport = sys.argv.pop(0)
 host, port = hostport.split(':')
 port = int(port)
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 s.bind((host, port))
-s.listen(128)
+s.listen(backlog)
 os.dup2(s.fileno(),0)
 os.close(s.fileno())
 os.execvp(sys.argv[0],sys.argv)
