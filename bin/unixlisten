@@ -13,12 +13,16 @@ import errno
 
 prog = sys.argv.pop(0)
 mode = 0770
+backlog = 128
 
 while len(sys.argv):
   arg0 = sys.argv[0]
   if arg0 == '-m':
     sys.argv.pop(0)
     mode = int(sys.argv.pop(0),8)
+  elif arg0 == '-b':
+    sys.argv.pop(0)
+    backlog = int(sys.argv.pop(0))
   elif arg0 == '--':
     sys.argv.pop(0)
     break
@@ -37,7 +41,7 @@ except OSError, e:
 s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 s.bind(path)
 os.chmod(path, mode)
-s.listen(32)
+s.listen(backlog)
 os.dup2(s.fileno(),0)
 os.close(s.fileno())
 os.execvp(sys.argv[0],sys.argv)
