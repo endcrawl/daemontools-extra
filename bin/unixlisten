@@ -12,6 +12,7 @@ import socket
 import errno
 
 prog = sys.argv.pop(0)
+usage = "usage: %s [-b backlog] [-m octal-mode] socket-path program" % prog
 mode = 0770
 backlog = 128
 
@@ -26,8 +27,15 @@ while len(sys.argv):
   elif arg0 == '--':
     sys.argv.pop(0)
     break
+  elif arg0.startswith('-'):
+    print >> sys.stderr, usage
+    exit(1)
   else:
     break
+
+if len(sys.argv) < 2:
+  print >> sys.stderr, usage
+  exit(1)
 
 path = os.path.realpath(sys.argv.pop(0))
 
