@@ -1,0 +1,65 @@
+#!/usr/bin/env python
+'''
+Like tcpserver(1) or unixserver(1), but exec the subordinate program
+with the listen socket on stdin. The subordinate program should call
+accept(2) on stdin.
+'''
+
+import sys
+import os
+import os.path
+import socket
+import errno
+
+prog = sys.argv.pop(0)
+usage = "usage: %s [-b backlog] [-m octal-mode] [host:port | path/to/socket] program" % prog
+mode = 0770
+backlog = 128
+
+while len(sys.argv):
+  arg0 = sys.argv[0]
+  if arg0 == '-m':
+    sys.argv.pop(0)
+    mode = int(sys.argv.pop(0),8)
+  elif arg0 == '-b':
+    sys.argv.pop(0)
+    backlog = int(sys.argv.pop(0))
+  elif arg0 == '--':
+    sys.argv.pop(0)
+    break
+  elif arg0.startswith('-'):
+    print >> sys.stderr, usage
+    exit(1)
+  else:
+    break
+
+if len(sys.argv) < 2:
+  print >> sys.stderr, usage
+  exit(1)
+
+address = sys.argv.pop(0)
+
+if address.find(':') >= 0 and address.find('/') < 0:
+  # Looks like host:port and not like a path.
+  host, port = address.split(':')
+  port = int(port)
+  s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+  s.bind((host, port))
+else:
+  # Looks like a path.
+  sockpath = address
+  # Remove socket from previous run, if it exists.
+  try:
+    os.unlink(sockpath)
+  except OSError, e:
+    if e.errno != errno.ENOENT:
+      raise
+  s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+  s.bind(sockpath)
+  os.chmod(sockpath, mode)
+
+s.listen(backlog)
+os.dup2(s.fileno(),0)
+os.close(s.fileno())
+os.execvp(sys.argv[0],sys.argv)
+
