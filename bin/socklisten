@@ -6,15 +6,16 @@ accept(2) on stdin.
 '''
 
 import sys
-import os
-import os.path
-import socket
-import errno
+from os import unlink, chmod, dup2, close, execvp
+from fcntl import fcntl, F_GETFD, F_SETFD, FD_CLOEXEC
+from errno import ENOENT
+from socket import socket, AF_INET, AF_UNIX, SOCK_STREAM
 
 prog = sys.argv.pop(0)
-usage = "usage: %s [-b backlog] [-m octal-mode] [host:port | path/to/socket] program" % prog
+usage = "usage: %s [-b backlog] [-m octal-mode] [-d fd] [host:port | path/to/socket] program" % prog
 mode = 0770
 backlog = 128
+fd = 0
 
 while len(sys.argv):
   arg0 = sys.argv[0]
@@ -24,6 +25,9 @@ while len(sys.argv):
   elif arg0 == '-b':
     sys.argv.pop(0)
     backlog = int(sys.argv.pop(0))
+  elif arg0 == '-d':
+    sys.argv.pop(0)
+    fd = int(sys.argv.pop(0))
   elif arg0 == '--':
     sys.argv.pop(0)
     break
@@ -43,23 +47,23 @@ if address.find(':') >= 0 and address.find('/') < 0:
   # Looks like host:port and not like a path.
   host, port = address.split(':')
   port = int(port)
-  s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+  s = socket(AF_INET, SOCK_STREAM)
   s.bind((host, port))
 else:
   # Looks like a path.
   sockpath = address
   # Remove socket from previous run, if it exists.
   try:
-    os.unlink(sockpath)
+    unlink(sockpath)
   except OSError, e:
-    if e.errno != errno.ENOENT:
+    if e.errno != ENOENT:
       raise
-  s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+  s = socket(AF_UNIX, SOCK_STREAM)
   s.bind(sockpath)
-  os.chmod(sockpath, mode)
+  chmod(sockpath, mode)
 
 s.listen(backlog)
-os.dup2(s.fileno(),0)
-os.close(s.fileno())
-os.execvp(sys.argv[0],sys.argv)
-
+dup2(s.fileno(), fd)
+close(s.fileno())
+fd and fcntl(fd, F_SETFD, ~FD_CLOEXEC & fcntl(fd, F_GETFD))
+execvp(sys.argv[0],sys.argv)
