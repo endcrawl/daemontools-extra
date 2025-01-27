@@ -3,7 +3,6 @@
 import sys
 import os
 import signal
-import errno
 import optparse
 
 
@@ -71,11 +70,8 @@ def main( argv, stdin, stdout, stderr ):
       while pid == None:
         try:
           pid, status = os.wait()
-        except OSError as e:
-          if e.errno == errno.EINTR:
-            break
-          else:
-            raise
+        except Signaled as e:
+          break
       if pid != None:
         rc = os.WEXITSTATUS(status)
         log( 1, "child %d (%d/%d) exited %d" % (pid,len(children),max_children,rc) )
@@ -94,6 +90,11 @@ def main( argv, stdin, stdout, stderr ):
 def signal_handler( signum, frame ):
   global signals
   signals.append(signum)
+  raise Signaled()
+
+
+class Signaled(Exception):
+  pass
 
 
 def log( level, msg ):
