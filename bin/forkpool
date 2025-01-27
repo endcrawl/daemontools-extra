@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 
-import sys
-import os
-import signal
+from os import fork, execvp, kill, pipe, read, close, waitpid, getpid, set_blocking, set_inheritable, WNOHANG, WEXITSTATUS
+from signal import signal, set_wakeup_fd, SIG_DFL, SIGQUIT, SIGHUP, SIGUSR1
+from select import select
 import optparse
+import sys
 
 
 signals = []
@@ -29,81 +30,94 @@ def main( argv, stdin, stdout, stderr ):
 
   log_level = opts.log_level
 
-  signal.signal( signal.SIGQUIT, signal_handler )
-  signal.signal( signal.SIGHUP, signal_handler )
-  signal.signal( signal.SIGUSR1, signal_handler )
+  signal( SIGQUIT, signal_handler )
+  signal( SIGHUP, signal_handler )
+  signal( SIGUSR1, signal_handler )
+
+  signal_rfd, signal_wfd = pipe()
+  set_blocking(signal_rfd, False), set_blocking(signal_wfd, False)
+  set_inheritable(signal_rfd, False), set_inheritable(signal_wfd, False)
+  set_wakeup_fd(signal_wfd)
 
   max_children = opts.count
-  children = {}
+  children = dict()  # key = child's pid, value = child's exit pipe fd
 
   while max_children or len(children):
 
-    if signal.SIGQUIT in signals:
+    # Process and clear pending signals.
+
+    if SIGQUIT in signals:
       log( 1, "got SIGQUIT, winding down" )
       max_children = 0
 
-    if signal.SIGHUP in signals:
+    if SIGHUP in signals:
       log( 1, "got SIGHUP, children should exit gracefully" )
       if opts.relay_signals:
         for pid in children.keys():
-          os.kill( pid, signal.SIGHUP )
+          kill( pid, SIGHUP )
 
-    if signal.SIGUSR1 in signals:
+    if SIGUSR1 in signals:
       pids = [ "%d" % pid for pid in children.keys() ]
       log( 2, "info: (%d/%d) children: %s" % (len(children),max_children,",".join(pids)) )
 
     signals[:] = []
 
     # Replenish children up to the limit.
+
     while len(children) < max_children:
-      pid = os.fork()
+      rfd, wfd = pipe()
+      set_blocking(rfd, False), set_blocking(wfd, False)
+      set_inheritable(rfd, False), set_inheritable(wfd, True)
+      pid = fork()
       if pid:
-        children[pid] = {}
+        close(wfd)
+        children[pid] = rfd
         log( 1, "child %d (%d/%d) started" % (pid,len(children),max_children) )
       else:
-        os.execvp(args[0],args)
+        execvp(args[0],args)
 
-    # Try to reap one child.
-    if len(children):
-      # FIXME use childpipes here so we can reap *all* that have exited
-      pid = None
-      while pid == None:
-        try:
-          pid, status = os.wait()
-        except Signaled as e:
-          break
-      if pid != None:
-        rc = os.WEXITSTATUS(status)
-        log( 1, "child %d (%d/%d) exited %d" % (pid,len(children),max_children,rc) )
-        del children[pid]
+    # Wait for signals or exited children.
 
+    rlist = [signal_rfd] + list(children.values())
+    rlist, wlist, xlist = select(rlist, [], [], None)
+    if signal_rfd in rlist:
+      read(signal_rfd, 1024)
 
-  while len(children):
-    pid, status = os.waitpid(-1, os.WNOHANG)
-    if not pid:
-      break
-    del children[pid]
+    # Reap children and report their status.
+
+    statuses = reap(children)
+    for pid, status in statuses.items():
+      rc = WEXITSTATUS(status)
+      log( 1, "child %d (%d/%d) exited %d" % (pid,len(children),max_children,rc) )
+
+  reap(children)
 
   return 0
+
+
+def reap( children ):
+  statuses = dict()
+  while len(children):
+    pid, status = waitpid(-1, WNOHANG)
+    if not pid:
+      break
+    statuses[pid] = status
+    close(children[pid])
+    del children[pid]
+  return statuses
 
 
 def signal_handler( signum, frame ):
   global signals
   signals.append(signum)
-  raise Signaled()
-
-
-class Signaled(Exception):
-  pass
 
 
 def log( level, msg ):
   global log_level
   if level > log_level: return
   prog = sys.argv[0].split('/')[-1]
-  print("%s/%05d: {L%d} %s" % (prog,os.getpid(),level,msg), file=sys.stderr)
+  print("%s/%05d: {L%d} %s" % (prog,getpid(),level,msg), file=sys.stderr)
 
 
 if __name__ == '__main__':
   exit( main(sys.argv,sys.stdin,sys.stdout,sys.stderr) )
-
