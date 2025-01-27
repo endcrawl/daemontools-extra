@@ -13,7 +13,7 @@ from socket import socket, AF_INET, AF_UNIX, SOCK_STREAM
 
 prog = sys.argv.pop(0)
 usage = "usage: %s [-b backlog] [-m octal-mode] [-d fd] [host:port | path/to/socket] program" % prog
-mode = 0770
+mode = 0o770
 backlog = 128
 fd = 0
 
@@ -55,7 +55,7 @@ else:
   # Remove socket from previous run, if it exists.
   try:
     unlink(sockpath)
-  except OSError, e:
+  except OSError as e:
     if e.errno != ENOENT:
       raise
   s = socket(AF_UNIX, SOCK_STREAM)
