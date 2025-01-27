@@ -71,7 +71,7 @@ def main( argv, stdin, stdout, stderr ):
       while pid == None:
         try:
           pid, status = os.wait()
-        except OSError, e:
+        except OSError as e:
           if e.errno == errno.EINTR:
             break
           else:
@@ -100,7 +100,7 @@ def log( level, msg ):
   global log_level
   if level > log_level: return
   prog = sys.argv[0].split('/')[-1]
-  print >> sys.stderr, "%s/%05d: {L%d} %s" % (prog,os.getpid(),level,msg)
+  print("%s/%05d: {L%d} %s" % (prog,os.getpid(),level,msg), file=sys.stderr)
 
 
 if __name__ == '__main__':
